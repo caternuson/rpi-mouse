@@ -11,25 +11,42 @@ import picamera
 import Image, ImageDraw, ImageFont
 import io
 import random
-from Adafruit_LED_Backpack import SevenSegment
 from datetime import datetime
 from time import sleep
 
-# setup seven segment display
-display = SevenSegment.SevenSegment(address=0x74, busnum=1)
-display.begin()
-display.clear()
-display.write_display()
-
 # setup GPIO
-PIR_PIN = 18
+PIR_PIN = 25
+MTR_PWR_PIN = 23
+MTR_CTL_PIN = 22
+LED_PIN = 18
 IO.setmode(IO.BCM)
 IO.setup(PIR_PIN, IO.IN)
+IO.setup(MTR_PWR_PIN, IO.OUT, initial=IO.LOW)
+IO.setup(MTR_CTL_PIN, IO.OUT, initial=IO.LOW)
+IO.setup(LED_PIN, IO.OUT, initial=IO.LOW)
 
 # setup Image draw stuff
 stream = io.BytesIO()
 font = ImageFont.truetype("fonts/whitrabt.ttf",132)
 
+def led_control(state=None):
+    if state==None:
+        return
+    elif state==0:
+        IO.output(LED_PIN, IO.LOW)
+    elif state==1:
+        IO.output(LED_PIN, IO.HIGH)
+        
+def release_door():
+    p = IO.PWM(MTR_CTL_PIN, 50)
+    p.start(10)
+    IO.output(MTR_PWR_PIN, IO.HIGH)
+    sleep(2)
+    #p.ChangeDutyCycle(10)
+    #sleep(3)
+    IO.output(MTR_PWR_PIN, IO.LOW)
+    p.stop()
+    
 # read names
 names = []
 with open('names.txt','r') as f:
@@ -43,9 +60,11 @@ while True:
     print "triggered."
     trigger_time = datetime.now()
     
-    print "updating display..."
-    display.print_float(3.14)
-    display.write_display()
+    print "closing door..."
+    release_door()
+    
+    print "turning on lights..."
+    led_control(1)
     
     print "capturing image..."
     with picamera.PiCamera(sensor_mode=2) as camera:
@@ -55,6 +74,9 @@ while True:
         camera.capture(stream, quality=95, format='jpeg')
     stream.seek(0)
     image = Image.open(stream)
+    
+    print "turning off lights..."
+    led_control(0)
     
     print "manipulating image..."
     draw = ImageDraw.Draw(image)
